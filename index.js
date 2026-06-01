@@ -70,7 +70,7 @@ module.exports = function (app) {
           timestamp: new Date().toISOString(),
           values: [
             { path: 'navigation.position',             value: { latitude: bowLat, longitude: bowLon } },
-            { path: 'navigation.gnssPosition', value: { latitude: lat,    longitude: lon    } }
+            { path: 'navigation.positionAntennaLocation', value: { latitude: lat, longitude: lon } }
           ]
         }]
       })
