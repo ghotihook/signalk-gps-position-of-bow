@@ -5,7 +5,17 @@ module.exports = function (app) {
     description: 'Calculates the GPS position of the bow from antenna placement and magnetic heading'
   }
 
-  plugin.schema = { type: 'object', properties: {} }
+  plugin.schema = {
+    type: 'object',
+    description: [
+      'Reads antenna placement from Signal K paths:',
+      '  sensors.gps.fromBow    — metres from antenna to bow along centreline',
+      '  sensors.gps.fromCenter — metres from centreline (-ve = starboard)',
+      'Heading source: navigation.headingMagnetic',
+      'Outputs: navigation.position (bow), navigation.positionAntennaLocation (raw GPS)'
+    ].join('\n'),
+    properties: {}
+  }
 
   let unsubscribe = null
 
@@ -80,7 +90,8 @@ module.exports = function (app) {
         }]
       })
 
-      app.setPluginStatus(`Active — bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
+      const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
+      app.setPluginStatus(`Active — antenna: ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
       next(delta)
     })
 
