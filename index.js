@@ -68,7 +68,10 @@ module.exports = function (app) {
         updates: [{
           source: { label: plugin.id, type: 'plugin' },
           timestamp: new Date().toISOString(),
-          values: [{ path: 'navigation.position', value: { latitude: bowLat, longitude: bowLon } }]
+          values: [
+            { path: 'navigation.position',             value: { latitude: bowLat, longitude: bowLon } },
+            { path: 'navigation.gnssPosition', value: { latitude: lat,    longitude: lon    } }
+          ]
         }]
       })
 
