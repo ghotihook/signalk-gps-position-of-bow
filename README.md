@@ -1,8 +1,8 @@
-# signalk-gps-position-of-bow
+# gh - GPS Position Of Bow
 
 Signal K plugin that calculates the GPS position of the bow using the antenna's known placement on the vessel and the current magnetic heading.
 
-Emits `navigation.bowPosition` with `latitude` and `longitude`.
+Emits `navigation.position` (bow position) and `navigation.positionAntennaLocation` (raw GPS antenna position).
 
 ## Configuration
 
