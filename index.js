@@ -1,7 +1,7 @@
 module.exports = function (app) {
   const plugin = {
     id: 'signalk-gps-position-of-bow',
-    name: 'GPS Position of Bow',
+    name: 'gh - Bow Position',
     description: 'Calculates the GPS position of the bow from antenna placement and magnetic heading'
   }
 
