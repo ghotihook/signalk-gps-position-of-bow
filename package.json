@@ -1,0 +1,9 @@
+{
+  "name": "signalk-gps-position-of-bow",
+  "version": "0.1.0",
+  "description": "Calculates the GPS position of the bow from antenna placement and magnetic heading",
+  "main": "index.js",
+  "keywords": ["signalk-node-server-plugin"],
+  "license": "Apache-2.0",
+  "engines": { "node": ">=12" }
+}
