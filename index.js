@@ -38,6 +38,7 @@ module.exports = function (app) {
       const fromCenter = app.getSelfPath('sensors.gps.fromCenter')?.value
 
       if (heading == null || fromBow == null || fromCenter == null) {
+        app.debug(`Missing data — heading: ${heading}, fromBow: ${fromBow}, fromCenter: ${fromCenter}`)
         app.setPluginStatus('Waiting for heading / antenna data...')
         next(delta)
         return
@@ -46,6 +47,8 @@ module.exports = function (app) {
       const lat = position.latitude
       const lon = position.longitude
       const h   = heading  // radians, magnetic (switch to headingTrue when available)
+
+      app.debug(`Antenna: lat=${lat.toFixed(6)} lon=${lon.toFixed(6)} heading=${(h * 180 / Math.PI).toFixed(1)}° fromBow=${fromBow}m fromCenter=${fromCenter}m`)
 
       // Forward unit vector (east, north): (sin h, cos h)
       // Port unit vector: (-cos h, sin h)
@@ -57,6 +60,8 @@ module.exports = function (app) {
       const R = 6371000
       const bowLat = lat + (northM / R) * (180 / Math.PI)
       const bowLon = lon + (eastM  / (R * Math.cos(lat * Math.PI / 180))) * (180 / Math.PI)
+
+      app.debug(`Bow: lat=${bowLat.toFixed(6)} lon=${bowLon.toFixed(6)} (offset east=${eastM.toFixed(2)}m north=${northM.toFixed(2)}m)`)
 
       // Strip raw GPS position so downstream sees only the bow-corrected value
       for (const update of (delta.updates || [])) {
