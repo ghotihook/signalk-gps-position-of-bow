@@ -38,6 +38,7 @@ module.exports = function (app) {
       (err) => app.setPluginError(err),
       (delta) => {
         for (const update of (delta.updates || [])) {
+          if (update.$source === plugin.id) continue
           const position = (update.values || []).find(v => v.path === 'navigation.position')?.value
           if (!position) continue
 
@@ -69,7 +70,7 @@ module.exports = function (app) {
             context: 'vessels.' + app.selfId,
             updates: [{
               timestamp: update.timestamp || new Date().toISOString(),
-              values: [{ path: 'navigation.bowPosition', value: { latitude: bowLat, longitude: bowLon } }]
+              values: [{ path: 'navigation.position', value: { latitude: bowLat, longitude: bowLon } }]
             }]
           })
 

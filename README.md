@@ -2,7 +2,7 @@
 
 Signal K plugin that calculates the GPS position of the bow from the antenna's known placement on the vessel and the current magnetic heading.
 
-Reads `navigation.position` (GPS antenna position) and `navigation.headingMagnetic`, and emits `navigation.bowPosition`.
+Reads `navigation.position` (GPS antenna position) and `navigation.headingMagnetic`, and emits the corrected bow position back to `navigation.position` under its own source label. Source priority determines which position consumers see.
 
 ---
 
@@ -56,6 +56,6 @@ The plugin uses `subscriptionmanager.subscribe` with `sourcePolicy: 'all'`, whic
 2. The antenna offset is projected forward and sideways using the heading to compute the bow's lat/lon
 3. The result is emitted to `navigation.bowPosition` via `handleMessage`
 
-Since the plugin reads from `navigation.position` and writes to `navigation.bowPosition`, there is no source priority conflict and no loop guard is required.
+Since the plugin reads from and writes to `navigation.position`, a loop guard (`u.$source === plugin.id`) skips the plugin's own output. Source priority determines which position consumers see — rank the plugin above the raw GPS source to make the bow position the canonical value.
 
 **Note:** currently uses `navigation.headingMagnetic` — switch to `navigation.headingTrue` once magnetic variation is available.
