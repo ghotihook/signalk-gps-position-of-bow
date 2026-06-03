@@ -12,7 +12,7 @@ module.exports = function (app) {
       '  sensors.gps.fromBow    — metres from antenna to bow along centreline',
       '  sensors.gps.fromCenter — metres from centreline (-ve = starboard)',
       'Heading source: navigation.headingMagnetic',
-      'Outputs: navigation.position (bow), navigation.positionAntennaLocation (raw GPS)'
+      'Outputs: navigation.position (bow)'
     ].join('\n'),
     properties: {}
   }
@@ -21,22 +21,14 @@ module.exports = function (app) {
 
   plugin.start = function (options) {
     unsubscribe = app.registerDeltaInputHandler((delta, next) => {
-      // Ignore our own output
-      for (const update of (delta.updates || [])) {
-        if (update.source && update.source.label === plugin.id) {
-          next(delta)
-          return
-        }
+      if ((delta.updates || []).some(u => u.source && u.source.label === plugin.id)) {
+        next(delta)
+        return
       }
 
-      // Only act when a position fix arrives — extract it from the delta directly
-      // (data model not yet updated at this point)
-      let position = null
-      for (const update of (delta.updates || [])) {
-        for (const v of (update.values || [])) {
-          if (v.path === 'navigation.position') position = v.value
-        }
-      }
+      const position = (delta.updates || [])
+        .flatMap(u => u.values || [])
+        .find(v => v.path === 'navigation.position')?.value
 
       if (!position) {
         next(delta)
@@ -54,18 +46,13 @@ module.exports = function (app) {
         return
       }
 
-      const lat = position.latitude
-      const lon = position.longitude
-      const h   = heading  // radians, magnetic (switch to headingTrue when available)
+      const { latitude: lat, longitude: lon } = position
 
-      app.debug(`Antenna: lat=${lat.toFixed(6)} lon=${lon.toFixed(6)} heading=${(h * 180 / Math.PI).toFixed(1)}° fromBow=${fromBow}m fromCenter=${fromCenter}m`)
+      app.debug(`Antenna: lat=${lat.toFixed(6)} lon=${lon.toFixed(6)} heading=${(heading * 180 / Math.PI).toFixed(1)}° fromBow=${fromBow}m fromCenter=${fromCenter}m`)
 
-      // Forward unit vector (east, north): (sin h, cos h)
-      // Port unit vector: (-cos h, sin h)
-      // Bow = GPS + fromBow * forward + (-fromCenter) * port
-      //   GPS is fromCenter metres to port (negative = starboard), bow is on centreline
-      const eastM  = fromBow * Math.sin(h) + fromCenter * Math.cos(h)
-      const northM = fromBow * Math.cos(h) - fromCenter * Math.sin(h)
+      // GPS is fromCenter metres to port of centreline; negative = starboard
+      const eastM  = fromBow * Math.sin(heading) + fromCenter * Math.cos(heading)
+      const northM = fromBow * Math.cos(heading) - fromCenter * Math.sin(heading)
 
       const R = 6371000
       const bowLat = lat + (northM / R) * (180 / Math.PI)
@@ -73,20 +60,12 @@ module.exports = function (app) {
 
       app.debug(`Bow: lat=${bowLat.toFixed(6)} lon=${bowLon.toFixed(6)} (offset east=${eastM.toFixed(2)}m north=${northM.toFixed(2)}m)`)
 
-      // Strip raw GPS position so downstream sees only the bow-corrected value
-      for (const update of (delta.updates || [])) {
-        update.values = (update.values || []).filter(v => v.path !== 'navigation.position')
-      }
-
       app.handleMessage(plugin.id, {
         context: 'vessels.' + app.selfId,
         updates: [{
           source: { label: plugin.id, type: 'plugin' },
           timestamp: new Date().toISOString(),
-          values: [
-            { path: 'navigation.position',             value: { latitude: bowLat, longitude: bowLon } },
-            { path: 'navigation.positionAntennaLocation', value: { latitude: lat, longitude: lon } }
-          ]
+          values: [{ path: 'navigation.position', value: { latitude: bowLat, longitude: bowLon } }]
         }]
       })
 
