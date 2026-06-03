@@ -1,3 +1,8 @@
+'use strict'
+
+const RAD_TO_DEG = 180 / Math.PI
+const DEG_TO_RAD = Math.PI / 180
+
 module.exports = function (app) {
   const plugin = {
     id: 'signalk-gps-position-of-bow',
@@ -17,66 +22,69 @@ module.exports = function (app) {
     properties: {}
   }
 
-  let unsubscribe = null
+  let unsubscribes = []
 
   plugin.start = function (options) {
-    unsubscribe = app.registerDeltaInputHandler((delta, next) => {
-      const position = (delta.updates || [])
-        .flatMap(u => u.values || [])
-        .find(v => v.path === 'navigation.position')?.value
+    unsubscribes.forEach(f => f())
+    unsubscribes = []
 
-      if (!position) {
-        next(delta)
-        return
+    app.subscriptionmanager.subscribe(
+      {
+        context: 'vessels.self',
+        sourcePolicy: 'all',
+        subscribe: [{ path: 'navigation.position' }]
+      },
+      unsubscribes,
+      (err) => app.setPluginError(err),
+      (delta) => {
+        for (const update of (delta.updates || [])) {
+          const position = (update.values || []).find(v => v.path === 'navigation.position')?.value
+          if (!position) continue
+
+          const heading    = app.getSelfPath('navigation.headingMagnetic')?.value
+          const fromBow    = app.getSelfPath('sensors.gps.fromBow')?.value
+          const fromCenter = app.getSelfPath('sensors.gps.fromCenter')?.value
+
+          if (heading == null || fromBow == null || fromCenter == null) {
+            app.debug(`missing data — heading: ${heading}, fromBow: ${fromBow}, fromCenter: ${fromCenter}`)
+            app.setPluginStatus('Waiting for heading / antenna data...')
+            continue
+          }
+
+          const { latitude: lat, longitude: lon } = position
+
+          app.debug(`antenna: lat=${lat.toFixed(6)} lon=${lon.toFixed(6)} heading=${(heading * RAD_TO_DEG).toFixed(1)}° fromBow=${fromBow}m fromCenter=${fromCenter}m`)
+
+          // fromCenter is metres to port of centreline; negative = starboard
+          const eastM  = fromBow * Math.sin(heading) + fromCenter * Math.cos(heading)
+          const northM = fromBow * Math.cos(heading) - fromCenter * Math.sin(heading)
+
+          const R = 6371000
+          const bowLat = lat + (northM / R) * RAD_TO_DEG
+          const bowLon = lon + (eastM / (R * Math.cos(lat * DEG_TO_RAD))) * RAD_TO_DEG
+
+          app.debug(`bow: lat=${bowLat.toFixed(6)} lon=${bowLon.toFixed(6)} (east=${eastM.toFixed(2)}m north=${northM.toFixed(2)}m)`)
+
+          app.handleMessage(plugin.id, {
+            context: 'vessels.' + app.selfId,
+            updates: [{
+              timestamp: update.timestamp || new Date().toISOString(),
+              values: [{ path: 'navigation.bowPosition', value: { latitude: bowLat, longitude: bowLon } }]
+            }]
+          })
+
+          const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
+          app.setPluginStatus(`Active — antenna ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
+        }
       }
-
-      const heading    = app.getSelfPath('navigation.headingMagnetic')?.value
-      const fromBow    = app.getSelfPath('sensors.gps.fromBow')?.value
-      const fromCenter = app.getSelfPath('sensors.gps.fromCenter')?.value
-
-      if (heading == null || fromBow == null || fromCenter == null) {
-        app.debug(`Missing data — heading: ${heading}, fromBow: ${fromBow}, fromCenter: ${fromCenter}`)
-        app.setPluginStatus('Waiting for heading / antenna data...')
-        next(delta)
-        return
-      }
-
-      const { latitude: lat, longitude: lon } = position
-
-      app.debug(`Antenna: lat=${lat.toFixed(6)} lon=${lon.toFixed(6)} heading=${(heading * 180 / Math.PI).toFixed(1)}° fromBow=${fromBow}m fromCenter=${fromCenter}m`)
-
-      // GPS is fromCenter metres to port of centreline; negative = starboard
-      const eastM  = fromBow * Math.sin(heading) + fromCenter * Math.cos(heading)
-      const northM = fromBow * Math.cos(heading) - fromCenter * Math.sin(heading)
-
-      const R = 6371000
-      const bowLat = lat + (northM / R) * (180 / Math.PI)
-      const bowLon = lon + (eastM  / (R * Math.cos(lat * Math.PI / 180))) * (180 / Math.PI)
-
-      app.debug(`Bow: lat=${bowLat.toFixed(6)} lon=${bowLon.toFixed(6)} (offset east=${eastM.toFixed(2)}m north=${northM.toFixed(2)}m)`)
-
-      app.handleMessage(plugin.id, {
-        context: 'vessels.' + app.selfId,
-        updates: [{
-          source: { label: plugin.id, type: 'plugin' },
-          timestamp: new Date().toISOString(),
-          values: [{ path: 'navigation.bowPosition', value: { latitude: bowLat, longitude: bowLon } }]
-        }]
-      })
-
-      const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
-      app.setPluginStatus(`Active — antenna: ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
-      next(delta)
-    })
+    )
 
     app.setPluginStatus('Active — waiting for position fix')
   }
 
   plugin.stop = function () {
-    if (unsubscribe) {
-      unsubscribe()
-      unsubscribe = null
-    }
+    unsubscribes.forEach(f => f())
+    unsubscribes = []
     app.setPluginStatus('Stopped')
   }
 
