@@ -12,7 +12,7 @@ module.exports = function (app) {
       '  sensors.gps.fromBow    — metres from antenna to bow along centreline',
       '  sensors.gps.fromCenter — metres from centreline (-ve = starboard)',
       'Heading source: navigation.headingMagnetic',
-      'Outputs: navigation.position (bow)'
+      'Outputs: navigation.bowPosition'
     ].join('\n'),
     properties: {}
   }
@@ -21,11 +21,6 @@ module.exports = function (app) {
 
   plugin.start = function (options) {
     unsubscribe = app.registerDeltaInputHandler((delta, next) => {
-      if ((delta.updates || []).some(u => u.source && u.source.label === plugin.id)) {
-        next(delta)
-        return
-      }
-
       const position = (delta.updates || [])
         .flatMap(u => u.values || [])
         .find(v => v.path === 'navigation.position')?.value
@@ -65,7 +60,7 @@ module.exports = function (app) {
         updates: [{
           source: { label: plugin.id, type: 'plugin' },
           timestamp: new Date().toISOString(),
-          values: [{ path: 'navigation.position', value: { latitude: bowLat, longitude: bowLon } }]
+          values: [{ path: 'navigation.bowPosition', value: { latitude: bowLat, longitude: bowLon } }]
         }]
       })
 
