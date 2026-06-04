@@ -28,6 +28,8 @@ module.exports = function (app) {
     unsubscribes.forEach(f => f())
     unsubscribes = []
 
+    const ownTimestamps = new Set()
+
     app.subscriptionmanager.subscribe(
       {
         context: 'vessels.self',
@@ -38,7 +40,12 @@ module.exports = function (app) {
       (err) => app.setPluginError(err),
       (delta) => {
         for (const update of (delta.updates || [])) {
+          if (update.timestamp && ownTimestamps.has(update.timestamp)) {
+            ownTimestamps.delete(update.timestamp)
+            continue
+          }
           if (update.$source === plugin.id) continue
+
           const position = (update.values || []).find(v => v.path === 'navigation.position')?.value
           if (!position) continue
 
@@ -66,10 +73,12 @@ module.exports = function (app) {
 
           app.debug(`bow: lat=${bowLat.toFixed(6)} lon=${bowLon.toFixed(6)} (east=${eastM.toFixed(2)}m north=${northM.toFixed(2)}m)`)
 
+          const outTs = new Date().toISOString()
+          ownTimestamps.add(outTs)
           app.handleMessage(plugin.id, {
             context: 'vessels.' + app.selfId,
             updates: [{
-              timestamp: update.timestamp || new Date().toISOString(),
+              timestamp: outTs,
               values: [{ path: 'navigation.position', value: { latitude: bowLat, longitude: bowLon } }]
             }]
           })
