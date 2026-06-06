@@ -96,14 +96,19 @@ module.exports = function (app) {
           const bowLat = lat + (northM / R) * RAD_TO_DEG
           const bowLon = lon + (eastM / (R * Math.cos(lat * DEG_TO_RAD))) * RAD_TO_DEG
 
-          const body = `IIXDR,A,${bowLat.toFixed(6)},D,BOWLAT,A,${bowLon.toFixed(6)},D,BOWLON`
-          const sentence = `$${body}*${nmeaChecksum(body)}`
-          const buf = Buffer.from(sentence + '\r\n')
-          socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
-            if (err) app.debug(`UDP send error: ${err.message}`)
-          })
+          const sentences = [
+            `IIXDR,A,${bowLat.toFixed(6)},D,BOWLAT`,
+            `IIXDR,A,${bowLon.toFixed(6)},D,BOWLON`
+          ].map(body => `$${body}*${nmeaChecksum(body)}`)
 
-          app.debug(`bow: ${sentence}`)
+          for (const sentence of sentences) {
+            const buf = Buffer.from(sentence + '\r\n')
+            socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
+              if (err) app.debug(`UDP send error: ${err.message}`)
+            })
+          }
+
+          app.debug(`bow: ${sentences.join(' ')}`)
 
           const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
           app.setPluginStatus(`Active — antenna ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
