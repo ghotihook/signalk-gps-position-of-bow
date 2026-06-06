@@ -42,8 +42,9 @@ module.exports = function (app) {
     return {
       type: 'object',
       properties: {
-        udpAddress: { type: 'string', title: 'UDP destination address', default: '255.255.255.255' },
-        udpPort:    { type: 'number', title: 'UDP destination port',    default: 1183 },
+        udpAddress:  { type: 'string', title: 'UDP destination address',      default: '255.255.255.255' },
+        udpPort:     { type: 'number', title: 'UDP destination port',         default: 1183 },
+        outputPath:  { type: 'string', title: 'Signal K output path',         default: 'navigation.bowPosition' },
         dependencies: {
           type: 'object',
           title: 'Dependencies',
@@ -76,6 +77,7 @@ module.exports = function (app) {
 
     const udpAddress = options.udpAddress || '255.255.255.255'
     const udpPort    = options.udpPort    || 1183
+    const outputPath = options.outputPath || 'navigation.bowPosition'
 
     socket = dgram.createSocket('udp4')
     socket.bind(0, () => socket.setBroadcast(true))
@@ -111,6 +113,15 @@ module.exports = function (app) {
         const buf = Buffer.from(sentence + '\r\n')
         socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
           if (err) app.debug(`UDP send error: ${err.message}`)
+        })
+
+        app.handleMessage(plugin.id, {
+          context: 'vessels.' + app.selfId,
+          updates: [{
+            source: { label: plugin.id, type: 'plugin' },
+            timestamp: new Date().toISOString(),
+            values: [{ path: outputPath, value: { latitude: bowLat, longitude: bowLon } }]
+          }]
         })
 
         app.debug(`bow: ${sentence}`)
