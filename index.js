@@ -6,20 +6,23 @@ const DEG_TO_RAD = Math.PI / 180
 module.exports = function (app) {
   const plugin = {
     id: 'signalk-gps-position-of-bow',
-    name: 'gh - GPS Position Of Bow',
+    name: 'gh - GPS Position of Bow',
     description: 'Calculates the GPS position of the bow from antenna placement and magnetic heading'
   }
 
-  plugin.schema = {
-    type: 'object',
-    description: [
-      'Reads antenna placement from Signal K paths:',
-      '  sensors.gps.fromBow    — metres from antenna to bow along centreline',
-      '  sensors.gps.fromCenter — metres from centreline (-ve = starboard)',
-      'Heading source: navigation.headingMagnetic',
-      'Outputs: navigation.bowPosition'
-    ].join('\n'),
-    properties: {}
+  plugin.schema = function () {
+    const ok = (path) => app.getSelfPath(path)?.value != null ? '✓' : '✗'
+    return {
+      type: 'object',
+      description: [
+        'Inputs:',
+        `  ${ok('navigation.position')}  navigation.position`,
+        `  ${ok('navigation.headingMagnetic')}  navigation.headingMagnetic`,
+        `  ${ok('sensors.gps.fromBow')}  sensors.gps.fromBow`,
+        `  ${ok('sensors.gps.fromCenter')}  sensors.gps.fromCenter`
+      ].join('\n'),
+      properties: {}
+    }
   }
 
   let unsubscribes = []
