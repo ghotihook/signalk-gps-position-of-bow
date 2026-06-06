@@ -67,12 +67,11 @@ module.exports = function (app) {
     }
   }
 
-  let unsubscribes = []
+  let unregisterHandler = null
   let socket = null
 
   plugin.start = function (options) {
-    unsubscribes.forEach(f => f())
-    unsubscribes = []
+    if (unregisterHandler) { unregisterHandler(); unregisterHandler = null }
     if (socket) { try { socket.close() } catch (e) {} }
 
     const udpAddress = options.udpAddress || '255.255.255.255'
@@ -81,61 +80,52 @@ module.exports = function (app) {
     socket = dgram.createSocket('udp4')
     socket.bind(0, () => socket.setBroadcast(true))
 
-    app.subscriptionmanager.subscribe(
-      {
-        context: 'vessels.self',
-        sourcePolicy: 'all',
-        subscribe: [{ path: 'navigation.position' }]
-      },
-      unsubscribes,
-      (err) => app.setPluginError(err),
-      (delta) => {
-        for (const update of (delta.updates || [])) {
-          const position = (update.values || []).find(v => v.path === 'navigation.position')?.value
-          if (!position) continue
+    unregisterHandler = app.registerDeltaInputHandler((delta, next) => {
+      for (const update of (delta.updates || [])) {
+        const position = (update.values || []).find(v => v.path === 'navigation.position')?.value
+        if (!position) continue
 
-          const heading    = app.getSelfPath('navigation.headingMagnetic')?.value
-          const fromBow    = app.getSelfPath('sensors.gps.fromBow')?.value
-          const fromCenter = app.getSelfPath('sensors.gps.fromCenter')?.value
+        const heading    = app.getSelfPath('navigation.headingMagnetic')?.value
+        const fromBow    = app.getSelfPath('sensors.gps.fromBow')?.value
+        const fromCenter = app.getSelfPath('sensors.gps.fromCenter')?.value
 
-          if (heading == null || fromBow == null || fromCenter == null) {
-            app.debug(`missing data — heading: ${heading}, fromBow: ${fromBow}, fromCenter: ${fromCenter}`)
-            app.setPluginStatus('Waiting for heading / antenna data...')
-            continue
-          }
-
-          const { latitude: lat, longitude: lon } = position
-
-          app.debug(`antenna: lat=${lat.toFixed(6)} lon=${lon.toFixed(6)} heading=${(heading * RAD_TO_DEG).toFixed(1)}° fromBow=${fromBow}m fromCenter=${fromCenter}m`)
-
-          // fromCenter is metres to port of centreline; negative = starboard
-          const eastM  = fromBow * Math.sin(heading) + fromCenter * Math.cos(heading)
-          const northM = fromBow * Math.cos(heading) - fromCenter * Math.sin(heading)
-
-          const R = 6371000
-          const bowLat = lat + (northM / R) * RAD_TO_DEG
-          const bowLon = lon + (eastM / (R * Math.cos(lat * DEG_TO_RAD))) * RAD_TO_DEG
-
-          const sentence = toGLL(bowLat, bowLon)
-          const buf = Buffer.from(sentence + '\r\n')
-          socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
-            if (err) app.debug(`UDP send error: ${err.message}`)
-          })
-
-          app.debug(`bow: ${sentence}`)
-
-          const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
-          app.setPluginStatus(`Active — antenna ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
+        if (heading == null || fromBow == null || fromCenter == null) {
+          app.debug(`missing data — heading: ${heading}, fromBow: ${fromBow}, fromCenter: ${fromCenter}`)
+          app.setPluginStatus('Waiting for heading / antenna data...')
+          continue
         }
+
+        const { latitude: lat, longitude: lon } = position
+
+        app.debug(`antenna: lat=${lat.toFixed(6)} lon=${lon.toFixed(6)} heading=${(heading * RAD_TO_DEG).toFixed(1)}° fromBow=${fromBow}m fromCenter=${fromCenter}m`)
+
+        // fromCenter is metres to port of centreline; negative = starboard
+        const eastM  = fromBow * Math.sin(heading) + fromCenter * Math.cos(heading)
+        const northM = fromBow * Math.cos(heading) - fromCenter * Math.sin(heading)
+
+        const R = 6371000
+        const bowLat = lat + (northM / R) * RAD_TO_DEG
+        const bowLon = lon + (eastM / (R * Math.cos(lat * DEG_TO_RAD))) * RAD_TO_DEG
+
+        const sentence = toGLL(bowLat, bowLon)
+        const buf = Buffer.from(sentence + '\r\n')
+        socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
+          if (err) app.debug(`UDP send error: ${err.message}`)
+        })
+
+        app.debug(`bow: ${sentence}`)
+
+        const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
+        app.setPluginStatus(`Active — antenna ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
       }
-    )
+      next(delta)
+    })
 
     app.setPluginStatus('Active — waiting for position fix')
   }
 
   plugin.stop = function () {
-    unsubscribes.forEach(f => f())
-    unsubscribes = []
+    if (unregisterHandler) { unregisterHandler(); unregisterHandler = null }
     if (socket) { try { socket.close() } catch (e) {} socket = null }
     app.setPluginStatus('Stopped')
   }
