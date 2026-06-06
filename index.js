@@ -1,13 +1,20 @@
 'use strict'
 
+const dgram    = require('dgram')
 const RAD_TO_DEG = 180 / Math.PI
 const DEG_TO_RAD = Math.PI / 180
+
+function nmeaChecksum(s) {
+  let c = 0
+  for (let i = 0; i < s.length; i++) c ^= s.charCodeAt(i)
+  return c.toString(16).toUpperCase().padStart(2, '0')
+}
 
 module.exports = function (app) {
   const plugin = {
     id: 'signalk-gps-position-of-bow',
     name: 'gh - GPS Position of Bow',
-    description: 'Calculates the GPS position of the bow from antenna placement and magnetic heading'
+    description: 'Calculates the GPS position of the bow from antenna placement and magnetic heading, outputs as NMEA 0183 XDR over UDP'
   }
 
   plugin.schema = function () {
@@ -15,6 +22,8 @@ module.exports = function (app) {
     return {
       type: 'object',
       properties: {
+        udpAddress: { type: 'string', title: 'UDP destination address', default: '255.255.255.255' },
+        udpPort:    { type: 'number', title: 'UDP destination port',    default: 1183 },
         dependencies: {
           type: 'object',
           title: 'Dependencies',
@@ -39,12 +48,18 @@ module.exports = function (app) {
   }
 
   let unsubscribes = []
+  let socket = null
 
   plugin.start = function (options) {
     unsubscribes.forEach(f => f())
     unsubscribes = []
+    if (socket) { try { socket.close() } catch (e) {} }
 
-    const ownTimestamps = new Set()
+    const udpAddress = options.udpAddress || '255.255.255.255'
+    const udpPort    = options.udpPort    || 1183
+
+    socket = dgram.createSocket('udp4')
+    socket.bind(0, () => socket.setBroadcast(true))
 
     app.subscriptionmanager.subscribe(
       {
@@ -56,12 +71,6 @@ module.exports = function (app) {
       (err) => app.setPluginError(err),
       (delta) => {
         for (const update of (delta.updates || [])) {
-          if (update.timestamp && ownTimestamps.has(update.timestamp)) {
-            ownTimestamps.delete(update.timestamp)
-            continue
-          }
-          if (update.$source === plugin.id) continue
-
           const position = (update.values || []).find(v => v.path === 'navigation.position')?.value
           if (!position) continue
 
@@ -87,17 +96,14 @@ module.exports = function (app) {
           const bowLat = lat + (northM / R) * RAD_TO_DEG
           const bowLon = lon + (eastM / (R * Math.cos(lat * DEG_TO_RAD))) * RAD_TO_DEG
 
-          app.debug(`bow: lat=${bowLat.toFixed(6)} lon=${bowLon.toFixed(6)} (east=${eastM.toFixed(2)}m north=${northM.toFixed(2)}m)`)
-
-          const outTs = new Date().toISOString()
-          ownTimestamps.add(outTs)
-          app.handleMessage(plugin.id, {
-            context: 'vessels.' + app.selfId,
-            updates: [{
-              timestamp: outTs,
-              values: [{ path: 'navigation.position', value: { latitude: bowLat, longitude: bowLon } }]
-            }]
+          const body = `IIXDR,A,${bowLat.toFixed(6)},D,BOWLAT,A,${bowLon.toFixed(6)},D,BOWLON`
+          const sentence = `$${body}*${nmeaChecksum(body)}`
+          const buf = Buffer.from(sentence + '\r\n')
+          socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
+            if (err) app.debug(`UDP send error: ${err.message}`)
           })
+
+          app.debug(`bow: ${sentence}`)
 
           const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
           app.setPluginStatus(`Active — antenna ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
@@ -111,6 +117,7 @@ module.exports = function (app) {
   plugin.stop = function () {
     unsubscribes.forEach(f => f())
     unsubscribes = []
+    if (socket) { try { socket.close() } catch (e) {} socket = null }
     app.setPluginStatus('Stopped')
   }
 
