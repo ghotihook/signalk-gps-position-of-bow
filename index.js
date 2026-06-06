@@ -11,24 +11,27 @@ module.exports = function (app) {
   }
 
   plugin.schema = function () {
-    const has = (path) => app.getSelfPath(path)?.value != null
+    const paths = [
+      'navigation.position',
+      'navigation.headingMagnetic',
+      'sensors.gps.fromBow',
+      'sensors.gps.fromCenter'
+    ]
+    const rows = paths.map(p => {
+      const ok = app.getSelfPath(p)?.value != null
+      return `<tr>
+        <td style="padding:3px 12px 3px 0">${p}</td>
+        <td style="color:${ok ? 'green' : 'red'};font-weight:bold">${ok ? '✓' : '✗'}</td>
+      </tr>`
+    }).join('')
     return {
       type: 'object',
-      properties: {
-        pos:        { type: 'boolean', title: 'navigation.position',        default: has('navigation.position') },
-        hdg:        { type: 'boolean', title: 'navigation.headingMagnetic', default: has('navigation.headingMagnetic') },
-        fromBow:    { type: 'boolean', title: 'sensors.gps.fromBow',        default: has('sensors.gps.fromBow') },
-        fromCenter: { type: 'boolean', title: 'sensors.gps.fromCenter',     default: has('sensors.gps.fromCenter') }
-      }
+      description: `<h4 style="margin-bottom:6px">Dependencies</h4><table>${rows}</table>`,
+      properties: {}
     }
   }
 
-  plugin.uiSchema = {
-    pos:        { 'ui:disabled': true },
-    hdg:        { 'ui:disabled': true },
-    fromBow:    { 'ui:disabled': true },
-    fromCenter: { 'ui:disabled': true }
-  }
+  plugin.uiSchema = {}
 
   let unsubscribes = []
 
