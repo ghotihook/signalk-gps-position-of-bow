@@ -11,27 +11,32 @@ module.exports = function (app) {
   }
 
   plugin.schema = function () {
-    const paths = [
-      'navigation.position',
-      'navigation.headingMagnetic',
-      'sensors.gps.fromBow',
-      'sensors.gps.fromCenter'
-    ]
-    const rows = paths.map(p => {
-      const ok = app.getSelfPath(p)?.value != null
-      return `<tr>
-        <td style="padding:3px 12px 3px 0">${p}</td>
-        <td style="color:${ok ? 'green' : 'red'};font-weight:bold">${ok ? '✓' : '✗'}</td>
-      </tr>`
-    }).join('')
+    const status = (path) => app.getSelfPath(path)?.value != null ? '✓  Available' : '✗  Not available'
     return {
       type: 'object',
-      description: `<h4 style="margin-bottom:6px">Dependencies</h4><table>${rows}</table>`,
-      properties: {}
+      properties: {
+        dependencies: {
+          type: 'object',
+          title: 'Dependencies',
+          properties: {
+            pos:        { type: 'string', title: 'navigation.position',        default: status('navigation.position') },
+            hdg:        { type: 'string', title: 'navigation.headingMagnetic', default: status('navigation.headingMagnetic') },
+            fromBow:    { type: 'string', title: 'sensors.gps.fromBow',        default: status('sensors.gps.fromBow') },
+            fromCenter: { type: 'string', title: 'sensors.gps.fromCenter',     default: status('sensors.gps.fromCenter') }
+          }
+        }
+      }
     }
   }
 
-  plugin.uiSchema = {}
+  plugin.uiSchema = {
+    dependencies: {
+      pos:        { 'ui:readonly': true },
+      hdg:        { 'ui:readonly': true },
+      fromBow:    { 'ui:readonly': true },
+      fromCenter: { 'ui:readonly': true }
+    }
+  }
 
   let unsubscribes = []
 
