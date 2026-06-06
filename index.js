@@ -10,6 +10,26 @@ function nmeaChecksum(s) {
   return c.toString(16).toUpperCase().padStart(2, '0')
 }
 
+function toGLL(lat, lon) {
+  const latAbs = Math.abs(lat)
+  const latDeg = Math.floor(latAbs)
+  const latMin = (latAbs - latDeg) * 60
+  const latHem = lat >= 0 ? 'N' : 'S'
+
+  const lonAbs = Math.abs(lon)
+  const lonDeg = Math.floor(lonAbs)
+  const lonMin = (lonAbs - lonDeg) * 60
+  const lonHem = lon >= 0 ? 'E' : 'W'
+
+  const now = new Date()
+  const hh = String(now.getUTCHours()).padStart(2, '0')
+  const mm = String(now.getUTCMinutes()).padStart(2, '0')
+  const ss = String(now.getUTCSeconds()).padStart(2, '0')
+
+  const body = `IIGLL,${String(latDeg).padStart(2, '0')}${latMin.toFixed(5)},${latHem},${String(lonDeg).padStart(3, '0')}${lonMin.toFixed(5)},${lonHem},${hh}${mm}${ss}.00,A`
+  return `$${body}*${nmeaChecksum(body)}`
+}
+
 module.exports = function (app) {
   const plugin = {
     id: 'signalk-gps-position-of-bow',
@@ -96,19 +116,13 @@ module.exports = function (app) {
           const bowLat = lat + (northM / R) * RAD_TO_DEG
           const bowLon = lon + (eastM / (R * Math.cos(lat * DEG_TO_RAD))) * RAD_TO_DEG
 
-          const sentences = [
-            `IIXDR,A,${bowLat.toFixed(6)},D,BOWLAT`,
-            `IIXDR,A,${bowLon.toFixed(6)},D,BOWLON`
-          ].map(body => `$${body}*${nmeaChecksum(body)}`)
+          const sentence = toGLL(bowLat, bowLon)
+          const buf = Buffer.from(sentence + '\r\n')
+          socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
+            if (err) app.debug(`UDP send error: ${err.message}`)
+          })
 
-          for (const sentence of sentences) {
-            const buf = Buffer.from(sentence + '\r\n')
-            socket.send(buf, 0, buf.length, udpPort, udpAddress, (err) => {
-              if (err) app.debug(`UDP send error: ${err.message}`)
-            })
-          }
-
-          app.debug(`bow: ${sentences.join(' ')}`)
+          app.debug(`bow: ${sentence}`)
 
           const centerLabel = fromCenter < 0 ? `${Math.abs(fromCenter)}m stbd` : `${fromCenter}m port`
           app.setPluginStatus(`Active — antenna ${fromBow}m fwd, ${centerLabel} | bow ${bowLat.toFixed(6)}, ${bowLon.toFixed(6)}`)
