@@ -92,59 +92,39 @@ module.exports = function (app) {
     description: 'Calculates the GPS position of the bow from antenna placement and magnetic heading, outputs as an NMEA 0183 GLL sentence over TCP or UDP'
   }
 
-  plugin.schema = function () {
-    const status = (path) => app.getSelfPath(path)?.value != null ? '✓  Available' : '✗  Not available'
-    return {
-      type: 'object',
-      properties: {
-        transport: {
-          type: 'string',
-          title: 'Transport',
-          description: 'UDP is fire-and-forget: nothing confirms the instrument received ' +
-                       'anything, but it suits devices that only listen, and broadcast ' +
-                       'addresses. TCP opens a client connection to the destination and ' +
-                       'reports link state.',
-          enum: ['udp', 'tcp'],
-          enumNames: ['UDP (datagrams)', 'TCP (client connection)'],
-          default: 'udp'
-        },
-        host:        { type: 'string', title: 'Destination address',          default: '255.255.255.255' },
-        port:        { type: 'number', title: 'Destination port',             default: 1183 },
-        connectTimeout: {
-          type: 'number',
-          title: 'TCP connect timeout (s)',
-          description: 'TCP only. Prevents a destination that silently drops packets from ' +
-                       'stalling for the operating system timeout (around two minutes) ' +
-                       'before retrying.',
-          default: 5
-        },
-        outputPath:  { type: 'string', title: 'Signal K output path',         default: 'navigation.bowPosition' },
-        dependencies: {
-          type: 'object',
-          title: 'Dependencies',
-          properties: {
-            pos:        { type: 'string', title: 'navigation.position',           default: status('navigation.position') },
-            hdgTrue:    { type: 'string', title: 'navigation.headingTrue',        default: status('navigation.headingTrue') },
-            hdgMag:     { type: 'string', title: 'navigation.headingMagnetic',    default: status('navigation.headingMagnetic') },
-            variation:  { type: 'string', title: 'navigation.magneticVariation',  default: status('navigation.magneticVariation') },
-            heading:    { type: 'string', title: 'Usable true heading',           default: trueHeading(app) ? `✓  via ${trueHeading(app).from}` : '✗  need headingTrue, or headingMagnetic + magneticVariation' },
-            fromBow:    { type: 'string', title: 'sensors.gps.fromBow',           default: status('sensors.gps.fromBow') },
-            fromCenter: { type: 'string', title: 'sensors.gps.fromCenter',        default: status('sensors.gps.fromCenter') }
-          }
-        }
+  // A plain object, not a function: nothing here depends on live data, and the
+  // input state it used to display is reported by the status line instead.
+  plugin.schema = {
+    type: 'object',
+    properties: {
+      transport: {
+        type: 'string',
+        title: 'Transport',
+        description: 'UDP is fire-and-forget: nothing confirms the instrument received ' +
+                     'anything, but it suits devices that only listen, and broadcast ' +
+                     'addresses. TCP opens a client connection to the destination and ' +
+                     'reports link state.',
+        enum: ['udp', 'tcp'],
+        enumNames: ['UDP (datagrams)', 'TCP (client connection)'],
+        default: 'udp'
+      },
+      host:        { type: 'string', title: 'Destination address', default: '255.255.255.255' },
+      port:        { type: 'number', title: 'Destination port',    default: 1183 },
+      connectTimeout: {
+        type: 'number',
+        title: 'TCP connect timeout (s)',
+        description: 'TCP only. Prevents a destination that silently drops packets from ' +
+                     'stalling for the operating system timeout (around two minutes) ' +
+                     'before retrying.',
+        default: 5
+      },
+      outputPath: {
+        type: 'string',
+        title: 'Signal K output path',
+        description: 'Where the bow position is published. The default sits alongside ' +
+                     'navigation.position rather than competing with it.',
+        default: 'navigation.bowPosition'
       }
-    }
-  }
-
-  plugin.uiSchema = {
-    dependencies: {
-      pos:        { 'ui:readonly': true },
-      hdgTrue:    { 'ui:readonly': true },
-      hdgMag:     { 'ui:readonly': true },
-      variation:  { 'ui:readonly': true },
-      heading:    { 'ui:readonly': true },
-      fromBow:    { 'ui:readonly': true },
-      fromCenter: { 'ui:readonly': true }
     }
   }
 
@@ -266,11 +246,18 @@ module.exports = function (app) {
         const fromCenter = app.getSelfPath('sensors.gps.fromCenter')?.value
 
         if (hdg == null || fromBow == null || fromCenter == null) {
-          const why = hdg == null
-            ? 'no true heading (need navigation.headingTrue, or headingMagnetic + magneticVariation)'
-            : `fromBow: ${fromBow}, fromCenter: ${fromCenter}`
-          app.debug(`missing data — ${why}`)
-          app.setPluginStatus(`Waiting — ${why}`)
+          // The status line is the only place input state is reported, so name
+          // exactly which paths are missing rather than dumping raw values.
+          const missing = []
+          if (hdg == null) {
+            missing.push('a true heading (navigation.headingTrue, or headingMagnetic + magneticVariation)')
+          }
+          if (fromBow == null)    missing.push('sensors.gps.fromBow')
+          if (fromCenter == null) missing.push('sensors.gps.fromCenter')
+
+          const why = `waiting for ${missing.join(', ')}`
+          app.debug(why)
+          app.setPluginStatus(`Active →${dest} — ${why}`)
           continue
         }
 

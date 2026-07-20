@@ -134,6 +134,52 @@ test('the bow lands 8 m north and 0.3 m west of a starboard antenna heading nort
   p.stop()
 })
 
+// The config screen no longer lists input availability, so the status line is
+// the only place a missing input is reported. It has to name the actual path.
+test('the status line names each missing input by path', () => {
+  const cases = [
+    [{ 'sensors.gps.fromBow': 8, 'sensors.gps.fromCenter': -0.3 }, /navigation\.headingTrue/],
+    [{ 'navigation.headingTrue': 0, 'sensors.gps.fromCenter': -0.3 }, /sensors\.gps\.fromBow/],
+    [{ 'navigation.headingTrue': 0, 'sensors.gps.fromBow': 8 }, /sensors\.gps\.fromCenter/]
+  ]
+
+  for (const [paths, expected] of cases) {
+    const app = makeApp(paths)
+    const p   = pluginFactory(app)
+    p.start({ transport: 'udp', host: '127.0.0.1', port: 59999 })
+    app.fire(positionDelta())
+
+    const last = app.statuses[app.statuses.length - 1]
+    assert.match(last, expected)
+    assert.equal(app.deltas.length, 0, 'nothing should be emitted while inputs are missing')
+    p.stop()
+  }
+})
+
+test('both missing offsets are reported together, not one at a time', () => {
+  const app = makeApp({ 'navigation.headingTrue': 0 })
+  const p   = pluginFactory(app)
+  p.start({ transport: 'udp', host: '127.0.0.1', port: 59999 })
+  app.fire(positionDelta())
+
+  const last = app.statuses[app.statuses.length - 1]
+  assert.match(last, /fromBow/)
+  assert.match(last, /fromCenter/)
+  p.stop()
+})
+
+test('the schema is a plain object the admin UI can render directly', () => {
+  const p = pluginFactory(makeApp(PATHS))
+  assert.equal(typeof p.schema, 'object', 'schema should not be a function')
+  assert.deepEqual(
+    Object.keys(p.schema.properties),
+    ['transport', 'host', 'port', 'connectTimeout', 'outputPath']
+  )
+  // The dependencies panel was removed; the status line covers it.
+  assert.ok(!('dependencies' in p.schema.properties), 'dependencies panel should be gone')
+  assert.ok(!p.uiSchema, 'uiSchema is only needed for the removed panel')
+})
+
 test('the output path is configurable and defaults to navigation.bowPosition', async () => {
   for (const [opts, expected] of [
     [{}, 'navigation.bowPosition'],

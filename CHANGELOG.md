@@ -12,7 +12,9 @@
   itself. True heading is taken from `navigation.headingTrue`, or derived from
   `navigation.headingMagnetic` + `navigation.magneticVariation`. With only magnetic heading
   available the plugin now emits nothing and says why, rather than being quietly wrong.
-- The Dependencies panel shows the heading inputs separately and which route is in use.
+- Removed the read-only Dependencies panel from the config screen — the status line already
+  reports missing inputs, and now names each one by path. Dropping it also lets the schema be
+  a plain object rather than a function evaluated at render time.
 
 - Packaged for the Signal K App Store: full package metadata, Apache-2.0 licence file,
   App Store category keywords, and a Node 20.10 floor matching the ecosystem.

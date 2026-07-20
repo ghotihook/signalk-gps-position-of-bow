@@ -24,14 +24,15 @@ software that want it in that form.
    ```
 
    Then enable it in **Server → Plugin Config**.
-2. **Check the Dependencies panel** in the plugin's config screen. It shows a tick or a cross for
-   each input the plugin needs. Everything must be ticked before output starts — see
-   [Inputs](#inputs) if something is missing.
-3. **Set the transport and destination** for the GLL sentence, or leave the defaults if you only
+2. **Set the transport and destination** for the GLL sentence, or leave the defaults if you only
    want the Signal K path.
-4. **Check the status line** in the plugin list. It should read
+3. **Check the status line** in the plugin list. It should read
    `Active →udp 255.255.255.255:1183 — antenna 8.5m fwd, 0.3m stbd | bow -33.864982, 151.210034`
    (that `stbd` comes from a `fromCenter` of −0.3).
+
+   If an input is missing it says so and names the path, e.g.
+   `Active →udp 255.255.255.255:1183 — waiting for sensors.gps.fromBow`. See
+   [Inputs](#inputs).
 
 ---
 
@@ -81,7 +82,7 @@ plugin requires true heading, and takes it from either:
 
 **Magnetic heading on its own is refused.** If it is all that is available, the plugin emits
 nothing and says so in the status line rather than producing a position that looks right and is
-quietly out by metres. The Dependencies panel shows which route is being used.
+quietly out by metres. Debug logging shows which route is being used.
 
 If you only have magnetic heading, the usual fix is a plugin that supplies
 `navigation.magneticVariation` from the WMM model and your position — after which the second
@@ -115,11 +116,6 @@ the link is up. Use UDP for broadcast, or for devices that only listen.
 
 > Settings saved before TCP was an option used the names `udpAddress` and `udpPort`. Those are
 > still read as a fallback, so existing installs keep working untouched and stay on UDP.
-
-### The Dependencies panel
-
-Read-only. It is a live status display, not configuration — it shows whether each required input
-is currently available, and which route the true heading is coming from.
 
 ### Choosing an output path
 
