@@ -1,9 +1,43 @@
 {
   "name": "signalk-gps-position-of-bow",
   "version": "0.1.0",
-  "description": "Calculates the GPS position of the bow from antenna placement and magnetic heading",
+  "description": "Calculates the GPS position of the bow from antenna placement and heading, and emits it to Signal K and as an NMEA 0183 GLL sentence over UDP",
   "main": "index.js",
-  "keywords": ["signalk-node-server-plugin"],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-category-nmea-0183",
+    "signalk-category-instruments",
+    "signalk",
+    "nmea0183",
+    "nmea",
+    "gps",
+    "position",
+    "bow",
+    "antenna",
+    "offset",
+    "sailing",
+    "racing"
+  ],
+  "author": "ghotihook",
   "license": "Apache-2.0",
-  "engines": { "node": ">=12" }
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ghotihook/signalk-gps-position-of-bow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ghotihook/signalk-gps-position-of-bow/issues"
+  },
+  "homepage": "https://github.com/ghotihook/signalk-gps-position-of-bow#readme",
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "//": "Matches the SignalK ecosystem floor — Venus OS on the Cerbo GX ships Node 20.",
+    "node": ">=20.10"
+  }
 }
