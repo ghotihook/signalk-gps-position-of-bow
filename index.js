@@ -117,13 +117,6 @@ module.exports = function (app) {
                      'stalling for the operating system timeout (around two minutes) ' +
                      'before retrying.',
         default: 5
-      },
-      outputPath: {
-        type: 'string',
-        title: 'Signal K output path',
-        description: 'Where the bow position is published. The default sits alongside ' +
-                     'navigation.position rather than competing with it.',
-        default: 'navigation.bowPosition'
       }
     }
   }
@@ -145,7 +138,6 @@ module.exports = function (app) {
     const host       = options.host || options.udpAddress || '255.255.255.255'
     const port       = options.port || options.udpPort    || 1183
     const isUdp      = options.transport !== 'tcp'
-    const outputPath = options.outputPath || 'navigation.bowPosition'
     const connTimeoutMs = (options.connectTimeout > 0 ? options.connectTimeout : 5) * 1000
 
     const dest = `${isUdp ? 'udp' : 'tcp'} ${host}:${port}`
@@ -231,13 +223,6 @@ module.exports = function (app) {
 
     unregisterHandler = app.registerDeltaInputHandler((delta, next) => {
       for (const update of (delta.updates || [])) {
-        // Skip our own output. Without this, setting the output path to
-        // navigation.position feeds every emitted delta straight back into this
-        // handler and recurses until the stack overflows. Check `label` — at
-        // this point in the pipeline $source is not yet set on update.source,
-        // so testing it silently matches nothing.
-        if (update.source && update.source.label === plugin.id) continue
-
         const position = (update.values || []).find(v => v.path === 'navigation.position')?.value
         if (!position) continue
 
@@ -273,15 +258,6 @@ module.exports = function (app) {
 
         const sentence = toGLL(bowLat, bowLon)
         send(sentence + '\r\n')
-
-        app.handleMessage(plugin.id, {
-          context: 'vessels.' + app.selfId,
-          updates: [{
-            source: { label: plugin.id, type: 'plugin' },
-            timestamp: new Date().toISOString(),
-            values: [{ path: outputPath, value: { latitude: bowLat, longitude: bowLon } }]
-          }]
-        })
 
         app.debug(`bow: ${sentence}`)
 

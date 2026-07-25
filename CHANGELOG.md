@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Removed the Signal K output path option.** The plugin now only sends the GLL sentence over
+  the network; it no longer publishes the bow position back into the Signal K data model. This
+  also removes the self-source guard in the delta handler, which existed only to stop that
+  publish from feeding back into the plugin.
 - **Output can now go over TCP as well as UDP.** A new *Transport* setting selects between them;
   TCP opens a client connection, retries every 5 s if it drops, and reports link state in the
   status line. UDP remains the default and existing `udpAddress`/`udpPort` settings are still

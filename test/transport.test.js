@@ -20,12 +20,10 @@ function makeApp (paths) {
   const app = {
     selfId: 'urn:mrn:signalk:uuid:test',
     statuses: [],
-    deltas: [],
     debug: () => {},
     setPluginStatus: (s) => app.statuses.push(s),
     setPluginError: () => {},
     getSelfPath: (p) => (paths[p] !== undefined ? { value: paths[p] } : undefined),
-    handleMessage: (id, d) => app.deltas.push(d),
     registerDeltaInputHandler: (h) => { handlers.push(h); return () => {} },
     fire: (delta) => handlers.forEach(h => h(delta, () => {}))
   }
@@ -98,42 +96,6 @@ test('a config saved under the old udpAddress/udpPort names still transmits', as
   assert.match(got, GLL)
 })
 
-test('the plugin does not act on its own output', async () => {
-  const app = makeApp(PATHS)
-  const p   = pluginFactory(app)
-  p.start({ transport: 'udp', host: '127.0.0.1', port: 59999 })
-
-  // A delta bearing the plugin's own label must be ignored. Without the guard
-  // this recurses until the stack overflows when outputPath is navigation.position.
-  app.fire({
-    updates: [{
-      source: { label: 'signalk-gps-position-of-bow' },
-      values: [{ path: 'navigation.position', value: { latitude: -33.8568, longitude: 151.2153 } }]
-    }]
-  })
-  assert.equal(app.deltas.length, 0, 'plugin re-processed its own delta')
-
-  // A delta from anything else must still be acted on.
-  app.fire(positionDelta())
-  assert.equal(app.deltas.length, 1, 'plugin ignored a foreign delta')
-
-  p.stop()
-})
-
-test('the bow lands 8 m north and 0.3 m west of a starboard antenna heading north', async () => {
-  const app = makeApp(PATHS)
-  const p   = pluginFactory(app)
-  p.start({ transport: 'udp', host: '127.0.0.1', port: 59999 })
-  app.fire(positionDelta())
-
-  const { latitude, longitude } = app.deltas[0].updates[0].values[0].value
-  // 8 m of latitude, and 0.3 m of longitude at 33.8 S.
-  assert.ok(Math.abs((latitude - -33.8568) - 8 / 6371000 * (180 / Math.PI)) < 1e-9, 'northing')
-  assert.ok(longitude < 151.2153, 'bow should be west of the antenna')
-
-  p.stop()
-})
-
 // The config screen no longer lists input availability, so the status line is
 // the only place a missing input is reported. It has to name the actual path.
 test('the status line names each missing input by path', () => {
@@ -151,7 +113,6 @@ test('the status line names each missing input by path', () => {
 
     const last = app.statuses[app.statuses.length - 1]
     assert.match(last, expected)
-    assert.equal(app.deltas.length, 0, 'nothing should be emitted while inputs are missing')
     p.stop()
   }
 })
@@ -173,23 +134,9 @@ test('the schema is a plain object the admin UI can render directly', () => {
   assert.equal(typeof p.schema, 'object', 'schema should not be a function')
   assert.deepEqual(
     Object.keys(p.schema.properties),
-    ['transport', 'host', 'port', 'connectTimeout', 'outputPath']
+    ['transport', 'host', 'port', 'connectTimeout']
   )
   // The dependencies panel was removed; the status line covers it.
   assert.ok(!('dependencies' in p.schema.properties), 'dependencies panel should be gone')
   assert.ok(!p.uiSchema, 'uiSchema is only needed for the removed panel')
-})
-
-test('the output path is configurable and defaults to navigation.bowPosition', async () => {
-  for (const [opts, expected] of [
-    [{}, 'navigation.bowPosition'],
-    [{ outputPath: 'navigation.position' }, 'navigation.position']
-  ]) {
-    const app = makeApp(PATHS)
-    const p   = pluginFactory(app)
-    p.start({ transport: 'udp', host: '127.0.0.1', port: 59999, ...opts })
-    app.fire(positionDelta())
-    assert.equal(app.deltas[0].updates[0].values[0].path, expected)
-    p.stop()
-  }
 })

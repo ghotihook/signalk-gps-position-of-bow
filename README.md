@@ -8,9 +8,8 @@ Reports the position of your **bow** rather than the position of your **GPS ante
 transom-mounted antenna and the bow decide whether you are over early.
 
 **What it does.** Takes the antenna's fix, its known offset on the vessel, and the current
-heading, and projects the fix forward to the bow. The result goes to Signal K on a path of your
-choosing, and out on the network as an NMEA 0183 GLL sentence for instruments and tactical
-software that want it in that form.
+heading, and projects the fix forward to the bow. The result is sent out on the network as an
+NMEA 0183 GLL sentence for instruments and tactical software that want it in that form.
 
 ## Quick start
 
@@ -24,8 +23,8 @@ software that want it in that form.
    ```
 
    Then enable it in **Server → Plugin Config**.
-2. **Set the transport and destination** for the GLL sentence, or leave the defaults if you only
-   want the Signal K path.
+2. **Set the transport and destination** for the GLL sentence, or leave the defaults to broadcast
+   over UDP.
 3. **Check the status line** in the plugin list. It should read
    `Active →udp 255.255.255.255:1183 — antenna 8.5m fwd, 0.3m stbd | bow -33.864982, 151.210034`
    (that `stbd` comes from a `fromCenter` of −0.3).
@@ -98,7 +97,6 @@ route above works automatically.
 | Destination address | `255.255.255.255` | Where the GLL sentence is sent. The default broadcasts to the local network |
 | Destination port | `1183` | Destination port |
 | TCP connect timeout (s) | `5` | TCP only. Stops a host that silently drops packets from stalling for the OS timeout (~2 min) before retrying |
-| Signal K output path | `navigation.bowPosition` | Where the bow position is published in the data model |
 
 ### TCP or UDP?
 
@@ -116,17 +114,6 @@ the link is up. Use UDP for broadcast, or for devices that only listen.
 
 > Settings saved before TCP was an option used the names `udpAddress` and `udpPort`. Those are
 > still read as a fallback, so existing installs keep working untouched and stay on UDP.
-
-### Choosing an output path
-
-The default, `navigation.bowPosition`, is deliberately *not* `navigation.position`. It publishes
-the bow position alongside the antenna position rather than competing with it, so nothing that
-expects `navigation.position` changes behaviour.
-
-If you would rather have the bow position *be* the vessel's position, set the output path to
-`navigation.position` and rank this plugin above your GPS source in **Server → Data Connections →
-Source Priorities**. Understand what that means before doing it: everything downstream — anchor
-alarms, logging, AIS transmission — then sees the bow rather than the antenna.
 
 ---
 
@@ -183,13 +170,10 @@ On each `navigation.position` delta:
 
 3. Those metres are converted to degrees on a spherical earth (R = 6 371 000 m), with the
    longitude step scaled by `cos(latitude)` for meridian convergence.
-4. The result is published to the Signal K output path and sent as GLL.
+4. The result is sent as a GLL sentence.
 
 A spherical earth is used rather than the WGS-84 ellipsoid. Over offsets of a few metres the
 difference is well under a millimetre — far below GPS noise.
-
-The plugin skips deltas carrying its own source label, so pointing the output path at
-`navigation.position` does not feed the plugin its own result.
 
 ---
 
